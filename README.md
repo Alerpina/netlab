@@ -1,78 +1,246 @@
-<h1 align="center">Lorraine Gomes</h1>
-<p align="center"><b>DevOps & Infraestrutura</b> · CI/CD · Observabilidade · Automação · Segurança</p>
-<p align="center">
-  <a href="https://www.linkedin.com/in/lorraine-gomes-barglini-24a084336/"><img src="https://img.shields.io/badge/LinkedIn-Lorraine%20Gomes-0A66C2?logo=linkedin&logoColor=white" alt="LinkedIn"></a>
-  <img src="https://img.shields.io/badge/Foz%20do%20Igua%C3%A7u-PR-2B2326" alt="Foz do Iguaçu - PR">
-</p>
+# netauto-lab
 
----
+Lab de **automação de rede** com o fluxo usado em data center: o **NetBox** diz como a rede deve ser,
+o código transforma isso em configuração, o **Ansible** aplica, o **Robot Framework** confere antes e
+depois, e um verificador de **drift** avisa quando alguém mexe na rede fora do pipeline.
 
-### Sobre mim
+Tudo roda num fabric spine-leaf de **Nokia SR Linux** no containerlab (imagem pública, sem licença).
 
-Sou engenheira DevOps na **Intelltech IT**, com 4 anos na área e no mercado de TI desde os 17. Atuo de ponta a ponta: escrevo as pipelines, automatizo os servidores, monitoro as aplicações e fecho as brechas de segurança. Hoje cuido de ambientes Windows e Linux para produtos da área da saúde, on-premises e em nuvem.
+```mermaid
+flowchart LR
+    PR[PR no GitHub] --> CI[CI: ruff, pytest,<br/>ansible-lint, render]
+    CI --> MAIN[main]
+    NB[(NetBox<br/>fonte da verdade)] --> R[render<br/>Python + Jinja2]
+    MAIN --> R
+    R --> PRE[pre-checks<br/>Robot]
+    PRE --> BK[backup<br/>Ansible]
+    BK --> AP[apply<br/>Ansible, 1 por vez]
+    AP --> POST[post-checks<br/>Robot: interfaces, LLDP, drift]
+    POST -- falhou --> RB[rollback<br/>Ansible]
+    POST --> DR[relatório de drift]
+```
 
-Curso **Tecnologia em Defesa Cibernética na FIAP** (conclusão em 2027), e por isso trago a segurança para dentro de cada etapa do ciclo DevOps.
+## O que este lab demonstra
 
-### O que eu faço no dia a dia
-
-**🚀 CI/CD**
-- Pipelines no **GitHub Actions** para aplicações **.NET/IIS** em vários ambientes (DEV e QA), com escolha de branch e de componente e regras por ambiente.
-- Pipelines de produção para **Laravel**, com testes, build de artefato, **backup automático do banco**, modo manutenção, health check e rollback testado.
-- Migração de um workflow monolítico para **pipelines isoladas por microsserviço**, uma em cada repositório.
-- Gestão de **self-hosted runners** (Linux e Windows) e estudo de migração dos runners para a **OCI**.
-
-**📈 Observabilidade**
-- Stack **OpenTelemetry → Grafana Alloy → OTel Collector → Prometheus / Tempo / Loki → Grafana**.
-- Dashboards de **RPS, taxa de erro e latência P50/P95/P99** a partir de spanmetrics, métricas de IIS e App Pools, e saúde de **SQL Server** por ambiente.
-- Exporter próprio em **PowerShell** para IIS. Otimizei o exporter tirando as consultas WMI de dentro do loop: o número de consultas por coleta caiu cerca de 300 vezes, e o tempo de resposta, que passava de 16 s, ficou quase instantâneo.
-- Alertas no **Telegram**.
-
-**🛠️ Infraestrutura como código e automação**
-- **Ansible via WinRM** para provisionar servidores Windows: IIS, .NET, SQL Server, Cassandra e RabbitMQ.
-- Pipeline que instala agentes de monitoramento em qualquer servidor a partir de um único input.
-- Ajuste de desempenho em larga escala: troca do Garbage Collector em **40+ App Pools** e limite de CPU por pool, com backup e comando de rollback.
-- **Docker** e **Docker Compose** para ambientes locais e de onboarding.
-
-**🔒 Segurança aplicada**
-- **2FA (TOTP)** obrigatório, correção de **IDOR** e **política de senhas** com expiração em uma aplicação em produção.
-- Hardening de servidores Linux: firewall, SSH só com chave, remoção de serviços expostos e de chaves órfãs.
-- Troca de deploys por SSH com chave guardada no CI por um runner com **privilégio mínimo**, e workers de fila fora do root.
-- Agente de consultas SQL com IA **somente leitura**: mascaramento de dados sensíveis, views dedicadas, limite de linhas e auditoria.
-
-### Tecnologias
-
-![GitHub Actions](https://img.shields.io/badge/GitHub%20Actions-2088FF?logo=githubactions&logoColor=white)
-![Ansible](https://img.shields.io/badge/Ansible-EE0000?logo=ansible&logoColor=white)
-![Docker](https://img.shields.io/badge/Docker-2496ED?logo=docker&logoColor=white)
-![Linux](https://img.shields.io/badge/Linux-FCC624?logo=linux&logoColor=black)
-![Windows Server](https://img.shields.io/badge/Windows%20Server-0078D6?logo=windows&logoColor=white)
-![PowerShell](https://img.shields.io/badge/PowerShell-5391FE?logo=powershell&logoColor=white)
-![Grafana](https://img.shields.io/badge/Grafana-F46800?logo=grafana&logoColor=white)
-![Prometheus](https://img.shields.io/badge/Prometheus-E6522C?logo=prometheus&logoColor=white)
-![OpenTelemetry](https://img.shields.io/badge/OpenTelemetry-425CC7?logo=opentelemetry&logoColor=white)
-![Azure](https://img.shields.io/badge/Azure-0078D4?logo=microsoftazure&logoColor=white)
-![Oracle Cloud](https://img.shields.io/badge/Oracle%20Cloud-F80000?logo=oracle&logoColor=white)
-![DigitalOcean](https://img.shields.io/badge/DigitalOcean-0080FF?logo=digitalocean&logoColor=white)
-![Nginx](https://img.shields.io/badge/Nginx-009639?logo=nginx&logoColor=white)
-![IIS](https://img.shields.io/badge/IIS-5E5E5E?logo=windows&logoColor=white)
-![SQL Server](https://img.shields.io/badge/SQL%20Server-CC2927?logo=microsoftsqlserver&logoColor=white)
-![MySQL](https://img.shields.io/badge/MySQL-4479A1?logo=mysql&logoColor=white)
-![n8n](https://img.shields.io/badge/n8n-EA4B71?logo=n8n&logoColor=white)
-
-**Estudando agora:** Kubernetes · Terraform · GitOps (Argo CD) · AWS
-
-### Projetos em destaque
-
-> Os projetos da empresa são privados. Aqui ficam estudos de caso escritos e versões de demonstração, sem dados de clientes.
-
-| Projeto | O que mostra |
+| Requisito | Onde está |
 |---|---|
-| [netauto-lab](labs/netauto-lab) | Automação de rede com NetBox como fonte da verdade, Python, Ansible, Robot Framework, drift e GitHub Actions |
-| _em breve_ | Pipeline de deploy com backup, manutenção, health check e rollback |
-| _em breve_ | Stack de observabilidade com OpenTelemetry e Grafana |
-| _em breve_ | Provisionamento de Windows Server com Ansible |
-| _em breve_ | Infraestrutura em nuvem com Terraform, Kubernetes e GitOps |
+| NetBox como fonte da verdade | `netauto/seed.py` (popular), `netauto/netbox_client.py` (ler), inventário dinâmico `ansible/inventory/netbox.yml` |
+| Python com Requests/HTTPX | `netbox_client.py` (paginação, retry com backoff, `ensure` idempotente) e `srl_client.py` (JSON-RPC do SR Linux) |
+| Ansible para mudança | `ansible/playbooks/`: backup, apply com `serial: 1` e `--diff`, rollback por `replace` |
+| Pre/post-checks com Robot Framework | `robot/`: acesso, interfaces up, **cabeamento real (LLDP) contra os cabos do NetBox**, sem drift |
+| Drift detection | `netauto/drift.py`: compara intenção x running, aponta `missing`, `changed` e `extra` |
+| Git, PR e code review | o CI publica a configuração gerada (formato CLI) no resumo do PR, para revisar a mudança de rede e não só o código |
+| Rastreabilidade e recuperação | logs JSON com `run_id` + commit, backup por execução, artefatos de 30 dias, rollback automático |
+| pytest | 29 testes que rodam sem equipamento (httpx `MockTransport`) |
+| Validação real | pipeline executado contra o lab: veja [Resultado validado](#resultado-validado) |
 
----
+## Topologia
 
-<p align="center"><i>Automatizar o que se repete, medir o que importa e proteger desde o primeiro commit.</i></p>
+```mermaid
+graph TD
+    spine1["spine1<br/>10.255.0.1"] ---|e1-1 / e1-49| leaf1["leaf1<br/>10.255.0.11"]
+    spine1 ---|e1-2 / e1-49| leaf2["leaf2<br/>10.255.0.12"]
+    spine2["spine2<br/>10.255.0.2"] ---|e1-1 / e1-50| leaf1
+    spine2 ---|e1-2 / e1-50| leaf2
+```
+
+Enlaces ponto a ponto em /31 (`10.0.0.0/31` a `10.0.0.6/31`), loopback em `system0`,
+gerência em `172.30.30.0/24`. Os dados de partida estão em `data/fabric.yml`.
+
+## Como rodar
+
+Pré-requisitos: Linux ou WSL2 com Docker, [containerlab](https://containerlab.dev/install/), Python 3.11+
+e **8 GB de RAM** livres (cada SR Linux usa cerca de 1,5 GB).
+
+```bash
+cd labs/netauto-lab
+make venv collections        # Python + coleções Ansible
+
+make lab-up                  # 4 SR Linux no containerlab
+make netbox-up               # NetBox em http://localhost:8000 (siga as instruções do script)
+
+export NETBOX_URL=http://localhost:8000
+export NETBOX_TOKEN=<token gerado no NetBox>
+export SRL_PASSWORD='NokiaSrl1!'   # senha padrão do SR Linux no containerlab, só para o lab
+
+make seed                    # fabric.yml -> NetBox (pode rodar quantas vezes quiser)
+make deploy                  # render, pre-checks, backup, apply, post-checks
+make drift                   # build/drift/report.json
+```
+
+Para ver o drift funcionando, mude algo direto no equipamento e rode `make drift`:
+
+```bash
+ssh admin@172.30.30.21   # leaf1
+# enter candidate
+# set / interface ethernet-1/49 description "mexeram aqui"
+# commit now
+```
+
+Para ver o rollback: `make rollback RUN_ID=<run_id do backup>` (os arquivos ficam em `build/backups/`).
+
+Sem lab no ar, dá para trabalhar só com os testes e o render a partir do YAML:
+
+```bash
+make test
+.venv/bin/python -m netauto.render --source file && cat build/intents/leaf1.cli
+```
+
+## Resultado validado
+
+Executado contra o lab real (4× SR Linux 24.10.1 no containerlab 0.82 + NetBox 4.7), não só no CI.
+
+### 1. Antes e depois no leaf1
+
+Antes do pipeline, as portas tinham cabo e estavam up, mas sem nenhuma configuração:
+
+```
+ethernet-1/49 is up, speed 100G
+ethernet-1/50 is up, speed 100G
+Summary
+  0 loopback interfaces configured
+  1 subinterfaces are up          # só a gerência
+```
+
+Depois do `make deploy`, tudo vindo do NetBox:
+
+```
+ethernet-1/49.0 is up   Network-instance: default   IPv4 addr: 10.0.0.1/31
+ethernet-1/50.0 is up   Network-instance: default   IPv4 addr: 10.0.0.5/31
+system0.0 is up         Network-instance: default   IPv4 addr: 10.255.0.11/32
+Summary
+  4 subinterfaces are up
+```
+
+O leaf1 alcança o spine1 pelo /31:
+
+```
+A:leaf1# ping 10.0.0.0 network-instance default -c 3
+3 packets transmitted, 3 received, 0% packet loss
+```
+
+### 2. Pipeline completo (`make deploy`)
+
+| Etapa | Resultado |
+|---|---|
+| Seed no NetBox | 1 site, 4 devices, 12 IPs, 4 cabos. Na segunda execução, nada criado (idempotente) |
+| Render | intenção dos 4 equipamentos, idêntica à gerada a partir do YAML |
+| Pre-checks (Robot) | 2/2 PASS: intenção gerada, equipamentos respondendo via JSON-RPC |
+| Backup (Ansible) | running dos 4 salva em `build/backups/<host>-<run_id>.json` |
+| Apply (Ansible) | `changed=1` em cada equipamento, aplicado um por vez, com diff |
+| Post-checks (Robot) | 3/3 PASS: interfaces up, **LLDP igual aos cabos do NetBox**, sem drift |
+| Apply de novo | `changed=0` nos 4 (idempotente) |
+
+### 3. Drift: detectar e corrigir
+
+Alteração feita direto no equipamento, fora do pipeline:
+
+```
+A:leaf1# enter candidate
+set / interface ethernet-1/49 description "mexeram aqui"
+commit now
+```
+
+`make drift` detecta, aponta o campo exato e sai com código 2:
+
+```json
+{
+  "run_id": "20261103-234146",
+  "commit": "1e7662a",
+  "hosts": {
+    "leaf1": {
+      "drift": [
+        {
+          "path": "/interface[name=ethernet-1/49]/description",
+          "kind": "changed",
+          "expected": "to spine1 ethernet-1/1",
+          "actual": "mexeram aqui"
+        }
+      ]
+    },
+    "leaf2": { "drift": [] },
+    "spine1": { "drift": [] },
+    "spine2": { "drift": [] }
+  }
+}
+```
+
+`make apply` reconcilia só o que divergiu, sem tocar nos outros equipamentos:
+
+```
+TASK [Aplicar (merge) a intenção]
+      interface ethernet-1/49 {
+-         description "mexeram aqui"
++         description "to spine1 ethernet-1/1"
+      }
+changed: [leaf1]
+
+leaf1  : changed=1
+leaf2  : changed=0
+spine1 : changed=0
+spine2 : changed=0
+```
+
+E o `make drift` seguinte volta para código 0: a rede está igual ao NetBox.
+
+### 4. O que o teste real encontrou
+
+O CI passava, mas dois problemas só apareceram na execução contra o lab. Os dois foram corrigidos via PR:
+
+- **`group_vars` no lugar errado.** O Ansible só carrega `group_vars` ao lado do inventário ou do playbook; ele estava em `ansible/`. O lint e o syntax-check não pegam isso, porque não resolvem variáveis. A pasta foi movida para `ansible/inventory/group_vars/`.
+- **Dependência faltando.** O inventário dinâmico do NetBox exige `pytz`, e as coleções de rede usam `netaddr`. Os dois foram adicionados ao `requirements.txt`.
+
+Lição: testes de unidade e lint são necessários, mas não substituem uma execução contra o ambiente real. É para isso que serve o lab.
+
+## Pipeline no GitHub Actions
+
+- **`netauto-ci.yml`** (todo PR): ruff, pytest, render, Robot dry-run, ansible-lint e syntax-check.
+  A configuração gerada aparece no resumo do job.
+- **`netauto-deploy.yml`** (manual): roda num **runner self-hosted** com label `netauto-lab`, na máquina
+  do lab. Pede a palavra `APLICAR`, vem em modo simulação por padrão, faz rollback se o post-check falhar
+  e guarda tudo (`build/`) como artefato.
+- **`netauto-drift.yml`** (manual, com agendamento pronto para ligar): falha quando a rede diverge do NetBox.
+
+Segredos do repositório: `NETBOX_TOKEN` e `SRL_PASSWORD`. Variáveis: `NETBOX_URL` e `SRL_USER`.
+
+## Decisões
+
+- **Intenção como dado, não como template de texto.** O render gera `{path, value}` para o JSON-RPC
+  do SR Linux. Isso é testável com `==` e é exatamente o que o módulo `nokia.srlinux.config` recebe.
+  O arquivo `.cli` existe só para leitura humana no PR.
+- **Merge no apply, replace no rollback.** O apply só acrescenta e corrige; o drift mostra o que sobrou.
+  O rollback devolve a running inteira salva antes da mudança.
+- **Um equipamento por vez** (`serial: 1`, `max_fail_percentage: 0`): se o primeiro falhar, os outros não são tocados.
+- **Validação antes de tudo.** IP repetido, /31 errado, interface em dois cabos ou papel inexistente
+  barram o processo antes de chegar na rede (`model.validate_fabric`).
+- **Os post-checks conferem o cabo de verdade.** O LLDP de cada porta tem que bater com o cabo cadastrado
+  no NetBox, o que pega cabo trocado no rack.
+
+## Estrutura
+
+```
+labs/netauto-lab/
+├── topology/fabric.clab.yml     # containerlab
+├── netbox/                      # sobe o NetBox local
+├── data/fabric.yml              # dados de partida do NetBox
+├── netauto/                     # pacote Python
+│   ├── model.py                 # modelo + validação
+│   ├── netbox_client.py         # API do NetBox (httpx)
+│   ├── seed.py                  # popula o NetBox
+│   ├── intent.py                # modelo -> intenção SR Linux
+│   ├── render.py                # gera build/intents
+│   ├── srl_client.py            # JSON-RPC do SR Linux
+│   ├── drift.py                 # intenção x running
+│   └── robot_lib.py             # keywords do Robot
+├── templates/srlinux.cli.j2
+├── ansible/                     # inventário NetBox (+ group_vars) e playbooks
+├── robot/                       # pre/post-checks
+└── tests/                       # pytest
+```
+
+## Próximos passos
+
+- Underlay eBGP (ASN por equipamento no NetBox) e post-check de sessões BGP estabelecidas.
+- `confirm_timeout` do `nokia.srlinux.config`: commit que se desfaz sozinho se o post-check não confirmar.
+- Overlay EVPN/VXLAN com VLANs vindas do NetBox.
+- Webhook do NetBox abrindo PR automaticamente quando a fonte da verdade mudar.
