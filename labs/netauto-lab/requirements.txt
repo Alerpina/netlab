@@ -4,3 +4,5 @@ PyYAML>=6.0
 robotframework>=7.0
 ansible-core>=2.16
 pynetbox>=7.4
+pytz>=2024.1
+netaddr>=1.3
