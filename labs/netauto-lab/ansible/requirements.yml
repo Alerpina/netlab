@@ -3,3 +3,4 @@ collections:
   - name: nokia.srlinux
   - name: netbox.netbox
   - name: ansible.netcommon
+  - name: community.general

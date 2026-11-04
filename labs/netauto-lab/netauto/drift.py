@@ -9,9 +9,14 @@ import argparse
 import json
 import re
 import sys
+import time
 from pathlib import Path
 from typing import Any
 
+from opentelemetry import metrics
+from opentelemetry.trace import Status, StatusCode
+
+from . import telemetry
 from .intent import LIST_KEYS
 from .logging_setup import get_logger, run_context
 from .settings import Settings
@@ -113,6 +118,26 @@ def load_intents(intent_dir: Path, hosts: list[str] | None = None) -> list[dict[
     return [i for i in intents if not hosts or i["host"] in hosts]
 
 
+def record_metrics(report: dict[str, Any], meter: metrics.Meter | None = None) -> None:
+    """Publica o resultado como métricas (vira netauto_drift_items etc. no Prometheus)."""
+    meter = meter or telemetry.meter()
+    items = meter.create_gauge(
+        "netauto.drift.items", unit="{item}", description="Diferenças entre NetBox e running"
+    )
+    reachable = meter.create_gauge(
+        "netauto.drift.reachable", unit="{bool}", description="1 se o equipamento respondeu"
+    )
+    last_run = meter.create_gauge(
+        "netauto.drift.last_run", unit="s", description="Epoch da última verificação"
+    )
+    for host, data in report["hosts"].items():
+        attrs = {"host": host}
+        reachable.set(0 if "error" in data else 1, attrs)
+        if "drift" in data:
+            items.set(len(data["drift"]), attrs)
+    last_run.set(int(time.time()))
+
+
 def main(argv: list[str] | None = None) -> int:
     cfg = Settings.from_env()
     parser = argparse.ArgumentParser(description="Detecta drift entre NetBox e equipamentos")
@@ -121,26 +146,38 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--host", action="append", dest="hosts")
     args = parser.parse_args(argv)
     cfg.require_device_credentials()
+    telemetry.setup()
 
     report: dict[str, Any] = {**run_context(), "hosts": {}}
     status = 0
-    for intent in load_intents(args.intents, args.hosts):
-        host = intent["host"]
-        try:
-            with SRLClient(intent["mgmt_ip"], cfg.srl_user, cfg.srl_password, verify=cfg.srl_verify) as c:
-                diffs = check_intent(c, intent)
-        except SRLError as exc:
-            log.error("sem acesso", extra={"host": host, "error": str(exc)})
-            report["hosts"][host] = {"error": str(exc)}
-            status = 1
-            continue
-        report["hosts"][host] = {"drift": diffs}
-        if diffs:
-            status = max(status, 2)
-            log.warning("drift", extra={"host": host, "count": len(diffs)})
-        else:
-            log.info("sem drift", extra={"host": host})
+    tracer = telemetry.tracer()
+    with tracer.start_as_current_span("netauto.drift", context=telemetry.parent_from_env()) as root:
+        for intent in load_intents(args.intents, args.hosts):
+            host = intent["host"]
+            with tracer.start_as_current_span(f"drift {host}") as span:
+                span.set_attribute("netauto.host", host)
+                try:
+                    with SRLClient(
+                        intent["mgmt_ip"], cfg.srl_user, cfg.srl_password, verify=cfg.srl_verify
+                    ) as c:
+                        diffs = check_intent(c, intent)
+                except SRLError as exc:
+                    log.error("sem acesso", extra={"host": host, "error": str(exc)})
+                    span.set_status(Status(StatusCode.ERROR, str(exc)))
+                    report["hosts"][host] = {"error": str(exc)}
+                    status = 1
+                    continue
+                span.set_attribute("netauto.drift.items", len(diffs))
+                report["hosts"][host] = {"drift": diffs}
+                if diffs:
+                    status = max(status, 2)
+                    span.add_event("drift", {"paths": [d["path"] for d in diffs]})
+                    log.warning("drift", extra={"host": host, "count": len(diffs)})
+                else:
+                    log.info("sem drift", extra={"host": host})
+        root.set_attribute("netauto.drift.status", status)
 
+    record_metrics(report)
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(report, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     return status
