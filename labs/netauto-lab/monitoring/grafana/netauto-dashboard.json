@@ -926,7 +926,7 @@
       "id": 11,
       "type": "state-timeline",
       "title": "Estado das portas",
-      "description": "Só as 8 portas com cabo na fábrica. Verde = up.",
+      "description": "Portas da fábrica: as que estiveram up em algum momento nas últimas 24h. Verde = up.",
       "datasource": {
         "type": "prometheus",
         "uid": "grafanacloud-prom"
@@ -943,7 +943,7 @@
             "type": "prometheus",
             "uid": "grafanacloud-prom"
           },
-          "expr": "srl_interface_oper_state{source=~\"spine.*\",interface_name=~\"ethernet-1/[12]\"} or srl_interface_oper_state{source=~\"leaf.*\",interface_name=~\"ethernet-1/(49|50)\"}",
+          "expr": "srl_interface_oper_state{interface_name=~\"ethernet-.*\"} and on(source, interface_name) (max_over_time(srl_interface_oper_state{interface_name=~\"ethernet-.*\"}[24h]) > 0)",
           "legendFormat": "{{source}} {{interface_name}}",
           "refId": "A",
           "instant": false,
@@ -1016,7 +1016,7 @@
           "refId": "A",
           "range": true,
           "instant": false,
-          "expr": "8 * rate((srl_interface_out_octets{source=~\"spine.*\",interface_name=~\"ethernet-1/[12]\"} or srl_interface_out_octets{source=~\"leaf.*\",interface_name=~\"ethernet-1/(49|50)\"})[2m:])",
+          "expr": "8 * rate(srl_interface_out_octets{interface_name=~\"ethernet-.*\"}[2m]) and on(source, interface_name) (max_over_time(srl_interface_oper_state{interface_name=~\"ethernet-.*\"}[24h]) > 0)",
           "legendFormat": "{{source}} {{interface_name}} saída"
         }
       ],
@@ -1051,7 +1051,7 @@
             "type": "prometheus",
             "uid": "grafanacloud-prom"
           },
-          "expr": "rate((srl_interface_in_error_packets{source=~\"spine.*\",interface_name=~\"ethernet-1/[12]\"} or srl_interface_in_error_packets{source=~\"leaf.*\",interface_name=~\"ethernet-1/(49|50)\"})[5m:]) + rate((srl_interface_out_error_packets{source=~\"spine.*\",interface_name=~\"ethernet-1/[12]\"} or srl_interface_out_error_packets{source=~\"leaf.*\",interface_name=~\"ethernet-1/(49|50)\"})[5m:])",
+          "expr": "(rate(srl_interface_in_error_packets{interface_name=~\"ethernet-.*\"}[5m]) + rate(srl_interface_out_error_packets{interface_name=~\"ethernet-.*\"}[5m])) and on(source, interface_name) (max_over_time(srl_interface_oper_state{interface_name=~\"ethernet-.*\"}[24h]) > 0)",
           "legendFormat": "{{source}} {{interface_name}}",
           "refId": "A",
           "instant": false,

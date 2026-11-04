@@ -20,6 +20,22 @@ flowchart LR
     POST --> DR[relatório de drift]
 ```
 
+## Veja funcionando
+
+**[Dashboard público no Grafana Cloud](https://mintyacht3054.grafana.net/public-dashboards/1f82d908e9c546f48ff8ba3c3440b882)** · dados ao vivo quando o lab está ligado (ele sobe sob demanda num droplet; fora disso, aparece o histórico recente).
+
+**Automação:** drift por equipamento, resultado e duração do último deploy, deploys em 24 h e os traces de cada execução.
+
+![Painel de automação: drift zerado, deploys com sucesso e traces do pipeline](docs/img/dashboard-automacao.png)
+
+**Trace de uma verificação de drift:** um span por equipamento, com o tempo de cada consulta via JSON-RPC.
+
+![Trace netauto.drift no Grafana Tempo com um span por switch](docs/img/trace-drift.png)
+
+**Rede:** telemetria gNMI dos SR Linux, com o estado das portas da fábrica e o tráfego por porta.
+
+![Estado das portas e tráfego vindos do gNMI](docs/img/dashboard-rede.png)
+
 ## O que este lab demonstra
 
 | Requisito | Onde está |
