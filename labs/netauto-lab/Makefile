@@ -4,6 +4,17 @@ PY ?= .venv/bin/python
 VENV_BIN := .venv/bin
 export RUN_ID ?= $(shell date +%Y%m%d-%H%M%S)
 export NETBOX_API ?= $(NETBOX_URL)
+
+# LAB_SIZE=mini: 1 spine e 2 leaves, para máquinas de 6 a 8 GB
+LAB_SIZE ?= full
+ifeq ($(LAB_SIZE),mini)
+TOPO ?= topology/fabric-mini.clab.yml
+FABRIC ?= data/fabric-mini.yml
+export GNMIC_FILE ?= gnmic-mini.yml
+else
+TOPO ?= topology/fabric.clab.yml
+FABRIC ?= data/fabric.yml
+endif
 ANSIBLE := cd ansible && ../$(VENV_BIN)/ansible-playbook
 
 .PHONY: help venv collections lab-up lab-down netbox-up seed render pre backup apply post drift rollback deploy deploy-check drift-watch mon-up mon-down test lint
@@ -18,16 +29,16 @@ collections: ## Instala as coleções Ansible (nokia.srlinux, netbox.netbox)
 	cd ansible && ../$(VENV_BIN)/ansible-galaxy collection install -r requirements.yml -p ./collections
 
 lab-up: ## Sobe os 4 SR Linux no containerlab
-	sudo containerlab deploy -t topology/fabric.clab.yml --reconfigure
+	sudo containerlab deploy -t $(TOPO) --reconfigure
 
 lab-down: ## Derruba o lab
-	sudo containerlab destroy -t topology/fabric.clab.yml --cleanup
+	sudo containerlab destroy -t $(TOPO) --cleanup
 
 netbox-up: ## Sobe o NetBox local (netbox-docker)
 	./netbox/setup.sh
 
 seed: ## Carrega data/fabric.yml no NetBox
-	$(PY) -m netauto.seed
+	$(PY) -m netauto.seed --fabric $(FABRIC)
 
 render: ## Gera build/intents a partir do NetBox
 	$(PY) -m netauto.render --source netbox

@@ -9,6 +9,17 @@ def test_fabric_do_repo_e_valido(fabric):
     validate_fabric(fabric)
 
 
+def test_fabric_mini_e_valido_e_tem_3_equipamentos():
+    from pathlib import Path
+
+    from netauto.model import load_fabric
+
+    mini = load_fabric(Path(__file__).resolve().parent.parent / "data" / "fabric-mini.yml")
+    devices = devices_from_fabric(mini)
+    assert [d.name for d in devices] == ["leaf1", "leaf2", "spine1"]
+    assert len(mini["links"]) == 2
+
+
 def test_lado_a_recebe_primeiro_ip_do_31(devices):
     spine1 = {i.name: i for i in devices["spine1"].interfaces}
     leaf1 = {i.name: i for i in devices["leaf1"].interfaces}

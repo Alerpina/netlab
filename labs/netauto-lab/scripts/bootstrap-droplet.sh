@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Sobe o netauto-lab inteiro num droplet novo (Ubuntu 24.04, 16 GB) em ~15 minutos:
+# Sobe o netauto-lab inteiro num droplet novo (Ubuntu 24.04) em ~15 minutos:
 # Docker, containerlab, NetBox, seed, deploy, monitoramento e drift contínuo.
 #
 # Uso, como root, dentro do clone do repositório:
@@ -7,6 +7,9 @@
 #   GRAFANA_CLOUD_INSTANCE_ID=<instance id> \
 #   ./scripts/bootstrap-droplet.sh
 # O token do Grafana Cloud é pedido sem aparecer na tela (ou venha em GRAFANA_CLOUD_API_TOKEN).
+#
+# Tamanho: com menos de 12 GB de RAM usa o lab "mini" (1 spine, 2 leaves), que cabe em
+# 2 vCPU / 6 GB. Para forçar: LAB_SIZE=full ou LAB_SIZE=mini.
 #
 # Segurança: nada fica exposto na internet além do SSH. NetBox e Alloy escutam só em
 # 127.0.0.1; os dados saem para o Grafana Cloud por conexão de saída.
@@ -35,6 +38,14 @@ if [[ -z "${GRAFANA_CLOUD_API_TOKEN:-}" ]]; then
   read -rsp "Token do Grafana Cloud (glc_...): " GRAFANA_CLOUD_API_TOKEN; echo
 fi
 [[ "$GRAFANA_CLOUD_API_TOKEN" == glc_* ]] || die "o token do Grafana Cloud começa com glc_"
+
+MEM_GB=$(( $(awk '/MemTotal/ {print $2}' /proc/meminfo) / 1024 / 1024 ))
+if [[ -z "${LAB_SIZE:-}" ]]; then
+  if (( MEM_GB < 12 )); then LAB_SIZE=mini; else LAB_SIZE=full; fi
+fi
+(( MEM_GB >= 5 )) || die "a máquina tem ${MEM_GB} GB; o lab mini precisa de pelo menos 6 GB"
+export LAB_SIZE
+echo "Memória: ${MEM_GB} GB -> lab ${LAB_SIZE}"
 
 log "1/9 Pacotes, firewall e swap"
 export DEBIAN_FRONTEND=noninteractive
@@ -83,6 +94,7 @@ else
   [[ -n "$NETBOX_TOKEN" && "$NETBOX_TOKEN" != null ]] || die "não consegui gerar o token do NetBox"
   umask 077
   cat > "$SECRETS" <<ENV
+LAB_SIZE=$LAB_SIZE
 NETBOX_URL=$NETBOX_URL
 NETBOX_API=$NETBOX_URL
 NETBOX_TOKEN=$NETBOX_TOKEN

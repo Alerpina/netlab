@@ -1,0 +1,63 @@
+# Versão enxuta (LAB_SIZE=mini): sem o spine2.
+# Telemetria por streaming gNMI dos SR Linux (o containerlab já liga o gNMI na porta 57400).
+# A senha vem da variável GNMIC_PASSWORD (definida no docker-compose a partir do .env).
+username: admin
+skip-verify: true
+encoding: json_ietf
+timeout: 10s
+log: true
+
+targets:
+  172.30.30.11:57400: { name: spine1 }
+  172.30.30.21:57400: { name: leaf1 }
+  172.30.30.22:57400: { name: leaf2 }
+
+subscriptions:
+  interface:
+    paths:
+      - /interface[name=*]/oper-state
+      - /interface[name=*]/statistics
+    mode: stream
+    stream-mode: sample
+    sample-interval: 10s
+  cpu:
+    paths:
+      - /platform/control[slot=*]/cpu[index=all]/total
+    mode: stream
+    stream-mode: sample
+    sample-interval: 30s
+  memory:
+    paths:
+      - /platform/control[slot=*]/memory
+    mode: stream
+    stream-mode: sample
+    sample-interval: 30s
+
+outputs:
+  prom:
+    type: prometheus
+    listen: :9804
+    path: /metrics
+    metric-prefix: srl
+    append-subscription-name: true
+    expiration: 60s
+    strings-as-labels: true
+    event-processors:
+      - trim-prefixes
+      - up-down-to-number
+
+processors:
+  # /interface/statistics/in-octets -> srl_interface_in_octets
+  trim-prefixes:
+    event-strings:
+      value-names: [".*"]
+      transforms:
+        - path-base:
+            apply-on: name
+  # oper-state "up"/"down" -> 1/0, para virar métrica numérica
+  up-down-to-number:
+    event-strings:
+      value-names: ["^oper-state$"]
+      transforms:
+        - replace: { apply-on: value, old: "up", new: "1" }
+        - replace: { apply-on: value, old: "down", new: "0" }

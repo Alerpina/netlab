@@ -1,0 +1,24 @@
+# Versão enxuta para máquinas pequenas (6 a 8 GB): 1 spine e 2 leaves.
+# Uso: make lab-up LAB_SIZE=mini
+name: netauto
+
+mgmt:
+  network: netauto-mgmt
+  ipv4-subnet: 172.30.30.0/24
+
+topology:
+  defaults:
+    kind: nokia_srlinux
+  kinds:
+    nokia_srlinux:
+      image: ghcr.io/nokia/srlinux:24.10.1
+      type: ixr-d2l
+
+  nodes:
+    spine1: { mgmt-ipv4: 172.30.30.11 }
+    leaf1:  { mgmt-ipv4: 172.30.30.21 }
+    leaf2:  { mgmt-ipv4: 172.30.30.22 }
+
+  links:
+    - endpoints: ["spine1:e1-1", "leaf1:e1-49"]
+    - endpoints: ["spine1:e1-2", "leaf2:e1-49"]

@@ -57,7 +57,7 @@ e **8 GB de RAM** livres (cada SR Linux usa cerca de 1,5 GB).
 cd labs/netauto-lab
 make venv collections        # Python + coleções Ansible
 
-make lab-up                  # 4 SR Linux no containerlab
+make lab-up                  # 4 SR Linux no containerlab (LAB_SIZE=mini: 1 spine e 2 leaves)
 make netbox-up               # NetBox em http://localhost:8000 (siga as instruções do script)
 
 export NETBOX_URL=http://localhost:8000
@@ -257,7 +257,7 @@ Configure no Grafana Cloud em **Alerting > Contact points** (tipo Telegram, com 
 
 Para demos e entrevistas sem pesar o PC: sobe um droplet, roda um script e destrói depois. Cobra só pelas horas em que o droplet existir.
 
-1. Crie um droplet **Ubuntu 24.04** com **16 GB de RAM / 4+ vCPU** e a sua chave SSH.
+1. Crie um droplet **Ubuntu 24.04** com a sua chave SSH. Com **2 vCPU / 6 GB** o script sobe o lab **mini** (1 spine, 2 leaves, ~US$ 0,06/hora); com **4 vCPU / 16 GB**, o lab completo.
 2. No droplet:
 
    ```bash
