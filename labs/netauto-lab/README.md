@@ -291,6 +291,23 @@ Para demos e entrevistas sem pesar o PC: sobe um droplet, roda um script e destr
 
 Só o SSH fica aberto: NetBox e Alloy escutam em `127.0.0.1`, e os dados saem para o Grafana Cloud por conexão de saída.
 
+### Segurança da VM
+
+Depois do bootstrap, rode `./scripts/harden-droplet.sh`. Ele deixa **só o SSH (22) aberto para fora**, e só com chave:
+
+| Camada | O que fica |
+|---|---|
+| SSH | só chave, sem senha, `MaxAuthTries 3`, só `root` (com chave) |
+| Firewall (ufw) | nega toda entrada; SSH com limite de taxa (`ufw limit`) |
+| Docker | regra na chain `DOCKER-USER` bloqueia acesso externo aos containers (o Docker ignora o ufw) |
+| fail2ban | bane por 1 hora quem errar o SSH 4 vezes em 10 minutos |
+| Atualizações | `unattended-upgrades` com patches de segurança automáticos |
+| Serviços | FTP, telnet, rpcbind e outros desligados, se existirem |
+
+NetBox, Alloy, Postgres e Redis escutam só em `127.0.0.1` ou na rede interna do Docker. Os switches ficam numa bridge interna, sem porta publicada.
+
+Como segunda barreira, fora da VM, use o **Cloud Firewall da DigitalOcean**: entrada só TCP 22, de preferência só a partir do seu IP; saída TCP 80/443, UDP 53/123 e ICMP.
+
 ## Pipeline no GitHub Actions
 
 - **`netauto-ci.yml`** (todo PR): ruff, pytest, render, Robot dry-run, ansible-lint e syntax-check.
