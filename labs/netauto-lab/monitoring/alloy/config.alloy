@@ -70,3 +70,22 @@ otelcol.receiver.prometheus "gnmic" {
 		metrics = [otelcol.processor.attributes.lab.input]
 	}
 }
+
+// CPU, memória, disco e carga do servidor que roda o lab (PC ou droplet)
+prometheus.exporter.unix "host" {
+	procfs_path    = "/host/proc"
+	sysfs_path     = "/host/sys"
+	rootfs_path    = "/host/root"
+	set_collectors = ["cpu", "meminfo", "loadavg", "filesystem"]
+
+	filesystem {
+		mount_points_exclude = "^/(dev|proc|run|sys|var/lib/docker/.+)($|/)"
+	}
+}
+
+prometheus.scrape "host" {
+	targets         = prometheus.exporter.unix.host.targets
+	job_name        = "host"
+	scrape_interval = "15s"
+	forward_to      = [otelcol.receiver.prometheus.gnmic.receiver]
+}

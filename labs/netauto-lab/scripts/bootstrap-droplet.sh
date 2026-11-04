@@ -95,6 +95,7 @@ else
   umask 077
   cat > "$SECRETS" <<ENV
 LAB_SIZE=$LAB_SIZE
+LAB_HOST=$(hostname)
 NETBOX_URL=$NETBOX_URL
 NETBOX_API=$NETBOX_URL
 NETBOX_TOKEN=$NETBOX_TOKEN
@@ -110,6 +111,8 @@ source "$SECRETS"
 set +a
 
 log "7/9 Monitoramento (gnmic + Grafana Alloy)"
+LAB_HOST="$(hostname)"
+export LAB_HOST
 umask 077
 cat > monitoring/.env <<ENV
 GRAFANA_CLOUD_OTLP_ENDPOINT=$GRAFANA_CLOUD_OTLP_ENDPOINT
