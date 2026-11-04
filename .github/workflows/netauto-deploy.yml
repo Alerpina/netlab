@@ -1,0 +1,96 @@
+name: netauto-lab Deploy
+
+# Mudança na rede: NetBox -> render -> pre-checks -> backup -> apply -> post-checks.
+# Se algo falhar depois do backup, volta sozinho. Tudo fica amarrado ao run_id e ao commit.
+on:
+  workflow_dispatch:
+    inputs:
+      confirmar:
+        description: "Digite APLICAR para mudar a rede"
+        required: true
+        type: string
+      somente_simular:
+        description: "Só simular (check mode + diff, sem mudar nada)"
+        type: boolean
+        default: true
+
+concurrency:
+  group: netauto-deploy
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  RUN_ID: ${{ github.run_id }}-${{ github.run_attempt }}
+  NETBOX_URL: ${{ vars.NETBOX_URL }}
+  NETBOX_API: ${{ vars.NETBOX_URL }}
+  NETBOX_TOKEN: ${{ secrets.NETBOX_TOKEN }}
+  SRL_USER: ${{ vars.SRL_USER }}
+  SRL_PASSWORD: ${{ secrets.SRL_PASSWORD }}
+
+defaults:
+  run:
+    working-directory: labs/netauto-lab
+
+jobs:
+  deploy:
+    name: Deploy na fábrica do lab
+    runs-on: [self-hosted, netauto-lab]
+    if: github.ref_name == 'main'
+    environment: netauto-lab
+    steps:
+      - name: Confirmação
+        run: |
+          if [ "${{ inputs.confirmar }}" != "APLICAR" ]; then
+            echo "::error::Digite APLICAR no campo de confirmação."; exit 1
+          fi
+
+      - uses: actions/checkout@v4
+
+      - name: Ambiente Python e coleções
+        run: |
+          python3 -m venv .venv
+          .venv/bin/pip install -q -r requirements.txt
+          cd ansible && ../.venv/bin/ansible-galaxy collection install -r requirements.yml -p ./collections
+
+      - name: Render a partir do NetBox
+        run: .venv/bin/python -m netauto.render --source netbox
+
+      - name: Pre-checks
+        run: .venv/bin/robot --pythonpath . --outputdir build/robot/pre robot/pre_checks.robot
+
+      - name: Backup
+        id: backup
+        working-directory: labs/netauto-lab/ansible
+        run: ../.venv/bin/ansible-playbook playbooks/backup.yml
+
+      - name: Aplicar
+        id: apply
+        working-directory: labs/netauto-lab/ansible
+        run: |
+          EXTRA=""
+          if [ "${{ inputs.somente_simular }}" = "true" ]; then EXTRA="--check"; fi
+          ../.venv/bin/ansible-playbook playbooks/apply.yml --diff $EXTRA
+
+      - name: Post-checks
+        if: ${{ !inputs.somente_simular }}
+        run: .venv/bin/robot --pythonpath . --outputdir build/robot/post robot/post_checks.robot
+
+      - name: Rollback automático
+        if: failure() && steps.backup.outcome == 'success'
+        working-directory: labs/netauto-lab/ansible
+        run: ../.venv/bin/ansible-playbook playbooks/rollback.yml
+
+      - name: Relatório de drift
+        if: always() && steps.backup.outcome == 'success'
+        run: .venv/bin/python -m netauto.drift || echo "::warning::Drift encontrado, veja build/drift/report.json"
+
+      - name: Guardar evidências
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: netauto-run-${{ env.RUN_ID }}
+          path: |
+            labs/netauto-lab/build/
+          retention-days: 30

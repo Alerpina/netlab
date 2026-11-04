@@ -1,0 +1,14 @@
+---
+# Inventário dinâmico: os equipamentos vêm do NetBox, não de arquivo.
+# Endpoint e token pelas variáveis NETBOX_API e NETBOX_TOKEN.
+plugin: netbox.netbox.nb_inventory
+validate_certs: false
+config_context: false
+interfaces: false
+group_by:
+  - platforms
+  - sites
+group_names_raw: true
+query_filters:
+  - site: lab-dc1
+  - platform: srlinux

@@ -1,0 +1,14 @@
+---
+# Conexão JSON-RPC do SR Linux via httpapi
+ansible_connection: ansible.netcommon.httpapi
+ansible_network_os: nokia.srlinux.srlinux
+ansible_httpapi_use_ssl: true
+ansible_httpapi_validate_certs: false
+ansible_user: "{{ lookup('ansible.builtin.env', 'SRL_USER') | default('admin', true) }}"
+ansible_password: "{{ lookup('ansible.builtin.env', 'SRL_PASSWORD') }}"
+
+# Pastas geradas pelo pipeline (fora do Git)
+build_dir: "{{ playbook_dir }}/../../build"
+intent_dir: "{{ build_dir }}/intents"
+backup_dir: "{{ build_dir }}/backups"
+run_id: "{{ lookup('ansible.builtin.env', 'RUN_ID') | default('manual', true) }}"

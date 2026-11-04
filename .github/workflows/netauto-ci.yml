@@ -1,0 +1,70 @@
+name: netauto-lab CI
+
+# Roda em todo PR que mexe no lab: nada chega na main sem teste, lint e intenção renderizada.
+on:
+  pull_request:
+    paths: ["labs/netauto-lab/**", ".github/workflows/netauto-*.yml"]
+  push:
+    branches: [main]
+    paths: ["labs/netauto-lab/**"]
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    working-directory: labs/netauto-lab
+
+jobs:
+  python:
+    name: Python (ruff + pytest)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: labs/netauto-lab/requirements-dev.txt
+      - run: pip install -r requirements-dev.txt
+      - run: ruff check .
+      - run: ruff format --check .
+      - run: pytest
+
+      - name: Renderizar intenção (a partir do fabric.yml)
+        run: python -m netauto.render --source file --out build/intents
+
+      - name: Robot dry-run
+        run: robot --dryrun --pythonpath . --outputdir build/robot robot/
+
+      - name: Diff da intenção no resumo do job
+        run: |
+          {
+            echo "### Intenção gerada"
+            for f in build/intents/*.cli; do
+              echo "<details><summary>$(basename "$f" .cli)</summary>"; echo
+              echo '```'; cat "$f"; echo '```'; echo "</details>"
+            done
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: intents-${{ github.sha }}
+          path: labs/netauto-lab/build/intents
+          retention-days: 14
+
+  ansible:
+    name: Ansible (lint + syntax)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: labs/netauto-lab/ansible
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install ansible-core ansible-lint
+      - run: ansible-galaxy collection install -r requirements.yml -p ./collections
+      - run: ansible-lint
+      - run: ansible-playbook --syntax-check -i inventory/static.yml playbooks/site.yml playbooks/rollback.yml

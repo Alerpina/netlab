@@ -1,0 +1,10 @@
+---
+# Plano B quando o NetBox estiver fora: ansible-playbook -i inventory/static.yml ...
+all:
+  children:
+    srlinux:
+      hosts:
+        spine1: { ansible_host: 172.30.30.11 }
+        spine2: { ansible_host: 172.30.30.12 }
+        leaf1: { ansible_host: 172.30.30.21 }
+        leaf2: { ansible_host: 172.30.30.22 }

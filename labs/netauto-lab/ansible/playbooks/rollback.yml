@@ -1,0 +1,26 @@
+---
+# Volta a running salva pelo backup.yml.
+# Uso: RUN_ID=<id da execução> ansible-playbook playbooks/rollback.yml
+- name: Rollback para o backup da execução
+  hosts: srlinux
+  gather_facts: false
+  serial: 1
+  vars:
+    backup_file: "{{ backup_dir }}/{{ inventory_hostname }}-{{ run_id }}.json"
+  tasks:
+    - name: Conferir se o backup existe
+      ansible.builtin.stat:
+        path: "{{ backup_file }}"
+      register: backup
+      delegate_to: localhost
+
+    - name: Parar se não houver backup
+      ansible.builtin.assert:
+        that: backup.stat.exists
+        fail_msg: "Backup não encontrado: {{ backup_file }}"
+
+    - name: Substituir a running pelo backup
+      nokia.srlinux.config:
+        replace:
+          - path: /
+            value: "{{ lookup('ansible.builtin.file', backup_file) | from_json }}"

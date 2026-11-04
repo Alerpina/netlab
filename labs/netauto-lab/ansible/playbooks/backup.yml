@@ -1,0 +1,26 @@
+---
+- name: Backup da running antes da mudança
+  hosts: srlinux
+  gather_facts: false
+  tasks:
+    - name: Criar a pasta de backup  # noqa: run-once[task] (strategy linear)
+      ansible.builtin.file:
+        path: "{{ backup_dir }}"
+        state: directory
+        mode: "0750"
+      delegate_to: localhost
+      run_once: true
+
+    - name: Ler a configuração running inteira
+      nokia.srlinux.get:
+        paths:
+          - path: /
+            datastore: running
+      register: running
+
+    - name: Salvar backup com o run_id da execução
+      ansible.builtin.copy:
+        content: "{{ running.result[0] | to_nice_json }}"
+        dest: "{{ backup_dir }}/{{ inventory_hostname }}-{{ run_id }}.json"
+        mode: "0640"
+      delegate_to: localhost
