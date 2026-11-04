@@ -253,6 +253,28 @@ Configure no Grafana Cloud em **Alerting > Contact points** (tipo Telegram, com 
 - O plano gratuito do Grafana Cloud cobre o volume do lab com folga: são poucas séries e poucos traces.
 - O dashboard mostra dados ao vivo **só enquanto o lab estiver ligado**; o histórico fica guardado conforme a retenção do plano.
 
+## Rodar na nuvem (DigitalOcean, sob demanda)
+
+Para demos e entrevistas sem pesar o PC: sobe um droplet, roda um script e destrói depois. Cobra só pelas horas em que o droplet existir.
+
+1. Crie um droplet **Ubuntu 24.04** com **16 GB de RAM / 4+ vCPU** e a sua chave SSH.
+2. No droplet:
+
+   ```bash
+   ssh root@<ip-do-droplet>
+   git clone https://github.com/Alerpina/netlab.git /opt/netlab
+   cd /opt/netlab/labs/netauto-lab
+   GRAFANA_CLOUD_OTLP_ENDPOINT=https://otlp-gateway-prod-sa-east-1.grafana.net/otlp \
+   GRAFANA_CLOUD_INSTANCE_ID=<instance id> \
+   ./scripts/bootstrap-droplet.sh          # pede o token do Grafana sem mostrar na tela
+   ```
+
+   Em uns 15 minutos o script instala Docker e containerlab, sobe a fábrica e o NetBox, cria o usuário e o token do NetBox sozinho, roda seed e deploy, liga o monitoramento e deixa o drift rodando a cada 5 minutos (serviço `netauto-drift`).
+3. NetBox pelo túnel SSH: `ssh -L 8000:localhost:8000 root@<ip>` e abra http://localhost:8000 (senha em `build/lab.env`).
+4. Terminou? **Destrua o droplet** no painel. Desligar não para a cobrança. O histórico continua no Grafana Cloud.
+
+Só o SSH fica aberto: NetBox e Alloy escutam em `127.0.0.1`, e os dados saem para o Grafana Cloud por conexão de saída.
+
 ## Pipeline no GitHub Actions
 
 - **`netauto-ci.yml`** (todo PR): ruff, pytest, render, Robot dry-run, ansible-lint e syntax-check.
@@ -298,6 +320,7 @@ labs/netauto-lab/
 ├── templates/srlinux.cli.j2
 ├── ansible/                     # inventário NetBox (+ group_vars) e playbooks
 ├── monitoring/                  # gnmic, Grafana Alloy e dashboard
+├── scripts/bootstrap-droplet.sh # sobe tudo num droplet novo
 ├── robot/                       # pre/post-checks
 └── tests/                       # pytest
 ```
