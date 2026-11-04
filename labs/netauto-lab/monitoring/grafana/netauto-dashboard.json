@@ -383,7 +383,9 @@
           "custom": {
             "drawStyle": "line",
             "lineInterpolation": "stepAfter",
-            "fillOpacity": 15
+            "fillOpacity": 15,
+            "axisSoftMax": 3,
+            "lineWidth": 2
           },
           "min": 0,
           "decimals": 0
@@ -393,13 +395,13 @@
     },
     {
       "id": 8,
-      "type": "barchart",
-      "title": "Execuções do pipeline (24h)",
-      "description": "",
+      "type": "stat",
+      "title": "Deploys nas últimas 24h",
       "datasource": {
         "type": "prometheus",
         "uid": "grafanacloud-prom"
       },
+      "description": "Cada deploy envia um ponto de netauto_pipeline_last_success (1 = sucesso, 0 = falha).",
       "gridPos": {
         "x": 12,
         "y": 6,
@@ -412,26 +414,87 @@
             "type": "prometheus",
             "uid": "grafanacloud-prom"
           },
-          "expr": "sum by (result) (increase(netauto_pipeline_runs_total[24h]))",
-          "legendFormat": "{{result}}",
           "refId": "A",
           "instant": true,
-          "range": false
+          "range": false,
+          "legendFormat": "total",
+          "expr": "sum(count_over_time(netauto_pipeline_last_success{pipeline=\"deploy\"}[24h]))"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "grafanacloud-prom"
+          },
+          "refId": "B",
+          "instant": true,
+          "range": false,
+          "legendFormat": "sucesso",
+          "expr": "sum(sum_over_time(netauto_pipeline_last_success{pipeline=\"deploy\"}[24h]))"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "grafanacloud-prom"
+          },
+          "refId": "C",
+          "instant": true,
+          "range": false,
+          "legendFormat": "falha",
+          "expr": "sum(count_over_time(netauto_pipeline_last_success{pipeline=\"deploy\"}[24h])) - sum(sum_over_time(netauto_pipeline_last_success{pipeline=\"deploy\"}[24h]))"
         }
       ],
-      "options": {
-        "xField": "result",
-        "orientation": "horizontal",
-        "showValue": "always"
-      },
       "fieldConfig": {
         "defaults": {
           "decimals": 0,
+          "noValue": "0",
           "color": {
-            "mode": "palette-classic"
+            "mode": "fixed",
+            "fixedColor": "blue"
           }
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "sucesso"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "green"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "falha"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "red"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value_and_name",
+        "justifyMode": "center",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
       }
     },
     {
@@ -480,7 +543,7 @@
       "id": 11,
       "type": "state-timeline",
       "title": "Estado das portas",
-      "description": "",
+      "description": "Só as 8 portas com cabo na fábrica. Verde = up.",
       "datasource": {
         "type": "prometheus",
         "uid": "grafanacloud-prom"
@@ -497,7 +560,7 @@
             "type": "prometheus",
             "uid": "grafanacloud-prom"
           },
-          "expr": "srl_interface_oper_state{interface_name=~\"ethernet-.*\"}",
+          "expr": "srl_interface_oper_state{source=~\"spine.*\",interface_name=~\"ethernet-1/[12]\"} or srl_interface_oper_state{source=~\"leaf.*\",interface_name=~\"ethernet-1/(49|50)\"}",
           "legendFormat": "{{source}} {{interface_name}}",
           "refId": "A",
           "instant": false,
@@ -543,14 +606,14 @@
       "options": {
         "showValue": "never",
         "mergeValues": true,
-        "rowHeight": 0.8
+        "rowHeight": 0.9
       }
     },
     {
       "id": 12,
       "type": "timeseries",
-      "title": "Tráfego de saída por porta",
-      "description": "",
+      "title": "Tráfego por porta da fábrica",
+      "description": "Bits por segundo nas portas com cabo. Sem tráfego de usuário, só LLDP e controle.",
       "datasource": {
         "type": "prometheus",
         "uid": "grafanacloud-prom"
@@ -567,11 +630,11 @@
             "type": "prometheus",
             "uid": "grafanacloud-prom"
           },
-          "expr": "8 * rate(srl_interface_out_octets{interface_name=~\"ethernet-.*\"}[2m])",
-          "legendFormat": "{{source}} {{interface_name}}",
           "refId": "A",
+          "range": true,
           "instant": false,
-          "range": true
+          "expr": "8 * rate((srl_interface_out_octets{source=~\"spine.*\",interface_name=~\"ethernet-1/[12]\"} or srl_interface_out_octets{source=~\"leaf.*\",interface_name=~\"ethernet-1/(49|50)\"})[2m:])",
+          "legendFormat": "{{source}} {{interface_name}} saída"
         }
       ],
       "fieldConfig": {
@@ -605,7 +668,7 @@
             "type": "prometheus",
             "uid": "grafanacloud-prom"
           },
-          "expr": "rate(srl_interface_in_error_packets{interface_name=~\"ethernet-.*\"}[5m]) + rate(srl_interface_out_error_packets{interface_name=~\"ethernet-.*\"}[5m])",
+          "expr": "rate((srl_interface_in_error_packets{source=~\"spine.*\",interface_name=~\"ethernet-1/[12]\"} or srl_interface_in_error_packets{source=~\"leaf.*\",interface_name=~\"ethernet-1/(49|50)\"})[5m:]) + rate((srl_interface_out_error_packets{source=~\"spine.*\",interface_name=~\"ethernet-1/[12]\"} or srl_interface_out_error_packets{source=~\"leaf.*\",interface_name=~\"ethernet-1/(49|50)\"})[5m:])",
           "legendFormat": "{{source}} {{interface_name}}",
           "refId": "A",
           "instant": false,

@@ -54,7 +54,9 @@ def setup(service: str = SERVICE_NAME) -> bool:
     tracer_provider.add_span_processor(BatchSpanProcessor(OTLPSpanExporter()))
     trace.set_tracer_provider(tracer_provider)
 
-    reader = PeriodicExportingMetricReader(OTLPMetricExporter(), export_interval_millis=30_000)
+    # Os comandos do lab duram segundos: com intervalo longo, cada execução exporta
+    # exatamente um ponto, no encerramento. O dashboard conta execuções por esses pontos.
+    reader = PeriodicExportingMetricReader(OTLPMetricExporter(), export_interval_millis=300_000)
     meter_provider = MeterProvider(resource=resource, metric_readers=[reader])
     metrics.set_meter_provider(meter_provider)
 
