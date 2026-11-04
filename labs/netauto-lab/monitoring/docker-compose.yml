@@ -17,6 +17,8 @@ services:
 
   alloy:
     image: grafana/alloy:v1.21.3
+    # Vira o rótulo "instance" das métricas do servidor (o bootstrap usa o hostname da VM)
+    hostname: ${LAB_HOST:-netauto-lab}
     command:
       - run
       - --server.http.listen-addr=0.0.0.0:12345
@@ -28,6 +30,10 @@ services:
       GRAFANA_CLOUD_API_TOKEN: ${GRAFANA_CLOUD_API_TOKEN:?defina no .env}
     volumes:
       - ./alloy/config.alloy:/etc/alloy/config.alloy:ro
+      # Leitura do servidor para CPU, memória, disco e carga
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/host/root:ro,rslave
     ports:
       # Só na máquina local: o pipeline em Python envia OTLP para cá
       - "127.0.0.1:4317:4317"
@@ -36,7 +42,7 @@ services:
     networks: [netauto-mgmt]
     depends_on: [gnmic]
     restart: unless-stopped
-    mem_limit: 256m
+    mem_limit: 320m
 
 networks:
   netauto-mgmt:
