@@ -67,6 +67,7 @@ Curso **Tecnologia em Defesa Cibernética na FIAP** (conclusão em 2027), e por 
 
 | Projeto | O que mostra |
 |---|---|
+| [netauto-lab](labs/netauto-lab) | Automação de rede com NetBox como fonte da verdade, Python, Ansible, Robot Framework, drift e GitHub Actions |
 | _em breve_ | Pipeline de deploy com backup, manutenção, health check e rollback |
 | _em breve_ | Stack de observabilidade com OpenTelemetry e Grafana |
 | _em breve_ | Provisionamento de Windows Server com Ansible |

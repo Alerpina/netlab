@@ -1,0 +1,60 @@
+# Atalhos do lab. Rode a partir de labs/netauto-lab.
+SHELL := /bin/bash
+PY ?= .venv/bin/python
+VENV_BIN := .venv/bin
+export RUN_ID ?= $(shell date +%Y%m%d-%H%M%S)
+export NETBOX_API ?= $(NETBOX_URL)
+ANSIBLE := cd ansible && ../$(VENV_BIN)/ansible-playbook
+
+.PHONY: help venv collections lab-up lab-down netbox-up seed render pre backup apply post drift rollback deploy test lint
+
+help:
+	@grep -E '^[a-z-]+:.*##' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-12s %s\n", $$1, $$2}'
+
+venv: ## Cria o ambiente Python com as dependências de dev
+	python3 -m venv .venv && $(VENV_BIN)/pip install -q -r requirements-dev.txt
+
+collections: ## Instala as coleções Ansible (nokia.srlinux, netbox.netbox)
+	cd ansible && ../$(VENV_BIN)/ansible-galaxy collection install -r requirements.yml -p ./collections
+
+lab-up: ## Sobe os 4 SR Linux no containerlab
+	sudo containerlab deploy -t topology/fabric.clab.yml --reconfigure
+
+lab-down: ## Derruba o lab
+	sudo containerlab destroy -t topology/fabric.clab.yml --cleanup
+
+netbox-up: ## Sobe o NetBox local (netbox-docker)
+	./netbox/setup.sh
+
+seed: ## Carrega data/fabric.yml no NetBox
+	$(PY) -m netauto.seed
+
+render: ## Gera build/intents a partir do NetBox
+	$(PY) -m netauto.render --source netbox
+
+pre: ## Pre-checks (Robot)
+	$(VENV_BIN)/robot --pythonpath . --outputdir build/robot/pre robot/pre_checks.robot
+
+backup: ## Backup da running de todos os equipamentos
+	$(ANSIBLE) playbooks/backup.yml
+
+apply: ## Aplica a intenção (um equipamento por vez)
+	$(ANSIBLE) playbooks/apply.yml --diff
+
+post: ## Post-checks (Robot): interfaces, LLDP x NetBox, drift
+	$(VENV_BIN)/robot --pythonpath . --outputdir build/robot/post robot/post_checks.robot
+
+drift: ## Relatório de drift em build/drift/report.json
+	$(PY) -m netauto.drift
+
+rollback: ## Volta o backup do RUN_ID informado: make rollback RUN_ID=...
+	$(ANSIBLE) playbooks/rollback.yml
+
+deploy: render pre backup apply post ## Fluxo completo (sem rollback automático)
+
+test: ## Testes unitários (sem equipamento)
+	$(PY) -m pytest
+
+lint: ## ruff + ansible-lint
+	$(VENV_BIN)/ruff check . && $(VENV_BIN)/ruff format --check .
+	cd ansible && ../$(VENV_BIN)/ansible-lint

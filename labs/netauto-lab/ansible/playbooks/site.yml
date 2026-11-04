@@ -1,0 +1,6 @@
+---
+- name: Backup
+  ansible.builtin.import_playbook: backup.yml
+
+- name: Aplicar intenção
+  ansible.builtin.import_playbook: apply.yml

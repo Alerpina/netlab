@@ -1,0 +1,22 @@
+---
+# Aplica a intenção gerada do NetBox, um equipamento por vez.
+# Se um falhar, o pipeline para antes de tocar no próximo.
+- name: Aplicar a intenção gerada a partir do NetBox
+  hosts: srlinux
+  gather_facts: false
+  serial: 1
+  max_fail_percentage: 0
+  tasks:
+    - name: Carregar a intenção do equipamento
+      ansible.builtin.set_fact:
+        intent: "{{ lookup('ansible.builtin.file', intent_dir ~ '/' ~ inventory_hostname ~ '.json') | from_json }}"
+
+    - name: Aplicar (merge) a intenção
+      nokia.srlinux.config:
+        update: "{{ intent.updates }}"
+      register: applied
+
+    - name: Mostrar o que mudou
+      ansible.builtin.debug:
+        var: applied.diff
+      when: applied.changed and applied.diff is defined

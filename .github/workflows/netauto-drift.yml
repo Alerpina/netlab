@@ -1,0 +1,35 @@
+name: netauto-lab Drift
+
+# Confere se alguém mexeu na rede fora do pipeline. Falha o job quando houver drift.
+on:
+  workflow_dispatch:
+  # Ligue quando o runner do lab ficar sempre no ar:
+  # schedule:
+  #   - cron: "17 9 * * 1-5"
+
+permissions:
+  contents: read
+
+env:
+  NETBOX_URL: ${{ vars.NETBOX_URL }}
+  NETBOX_TOKEN: ${{ secrets.NETBOX_TOKEN }}
+  SRL_USER: ${{ vars.SRL_USER }}
+  SRL_PASSWORD: ${{ secrets.SRL_PASSWORD }}
+
+defaults:
+  run:
+    working-directory: labs/netauto-lab
+
+jobs:
+  drift:
+    runs-on: [self-hosted, netauto-lab]
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 -m venv .venv && .venv/bin/pip install -q -r requirements.txt
+      - run: .venv/bin/python -m netauto.render --source netbox
+      - run: .venv/bin/python -m netauto.drift
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: drift-${{ github.run_id }}
+          path: labs/netauto-lab/build/drift/

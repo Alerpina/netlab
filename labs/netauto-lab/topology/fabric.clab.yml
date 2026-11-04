@@ -1,0 +1,31 @@
+# Fabric spine-leaf com Nokia SR Linux (imagem pública, sem licença)
+# Subir:   sudo containerlab deploy -t topology/fabric.clab.yml
+# Derrubar: sudo containerlab destroy -t topology/fabric.clab.yml --cleanup
+# Cada nó SR Linux usa ~1,5 GB de RAM: reserve 8 GB para o lab completo.
+name: netauto
+
+mgmt:
+  network: netauto-mgmt
+  ipv4-subnet: 172.30.30.0/24
+
+topology:
+  defaults:
+    kind: nokia_srlinux
+  kinds:
+    nokia_srlinux:
+      image: ghcr.io/nokia/srlinux:24.10.1
+      type: ixr-d2l
+
+  nodes:
+    spine1: { mgmt-ipv4: 172.30.30.11 }
+    spine2: { mgmt-ipv4: 172.30.30.12 }
+    leaf1:  { mgmt-ipv4: 172.30.30.21 }
+    leaf2:  { mgmt-ipv4: 172.30.30.22 }
+
+  # Cabos físicos: precisam bater com "links" em data/fabric.yml.
+  # O post-check confere isso via LLDP.
+  links:
+    - endpoints: ["spine1:e1-1", "leaf1:e1-49"]
+    - endpoints: ["spine1:e1-2", "leaf2:e1-49"]
+    - endpoints: ["spine2:e1-1", "leaf1:e1-50"]
+    - endpoints: ["spine2:e1-2", "leaf2:e1-50"]

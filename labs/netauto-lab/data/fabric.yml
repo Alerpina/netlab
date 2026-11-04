@@ -1,0 +1,24 @@
+# Dados de partida do NetBox (fonte da verdade).
+# O seed carrega isto no NetBox de forma idempotente; depois disso, quem manda é o NetBox.
+# Também é usado no CI para gerar as intenções sem precisar de um NetBox no ar.
+site: { name: LAB-DC1, slug: lab-dc1 }
+manufacturer: { name: Nokia, slug: nokia }
+platform: { name: SR Linux, slug: srlinux }
+device_type: { model: 7220 IXR-D2L, slug: 7220-ixr-d2l }
+
+roles:
+  - { name: Spine, slug: spine, color: 3f51b5 }
+  - { name: Leaf, slug: leaf, color: "009688" }
+
+devices:
+  spine1: { role: spine, mgmt: 172.30.30.11/24, loopback: 10.255.0.1/32 }
+  spine2: { role: spine, mgmt: 172.30.30.12/24, loopback: 10.255.0.2/32 }
+  leaf1:  { role: leaf,  mgmt: 172.30.30.21/24, loopback: 10.255.0.11/32 }
+  leaf2:  { role: leaf,  mgmt: 172.30.30.22/24, loopback: 10.255.0.12/32 }
+
+# Ponto a ponto /31: o lado "a" recebe o primeiro endereço, o lado "b" o segundo.
+links:
+  - { a: "spine1:ethernet-1/1", b: "leaf1:ethernet-1/49", subnet: 10.0.0.0/31 }
+  - { a: "spine1:ethernet-1/2", b: "leaf2:ethernet-1/49", subnet: 10.0.0.2/31 }
+  - { a: "spine2:ethernet-1/1", b: "leaf1:ethernet-1/50", subnet: 10.0.0.4/31 }
+  - { a: "spine2:ethernet-1/2", b: "leaf2:ethernet-1/50", subnet: 10.0.0.6/31 }

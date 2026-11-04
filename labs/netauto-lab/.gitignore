@@ -1,0 +1,12 @@
+build/
+.venv/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+ansible/collections/
+netbox/netbox-docker/
+clab-netauto/
+.clab-netauto*
+output.xml
+log.html
+report.html
