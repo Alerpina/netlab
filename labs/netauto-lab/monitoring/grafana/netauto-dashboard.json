@@ -65,7 +65,7 @@
             "type": "prometheus",
             "uid": "grafanacloud-prom"
           },
-          "expr": "max by (host) (netauto_drift_items)",
+          "expr": "max by (host) (last_over_time(netauto_drift_items[15m]))",
           "legendFormat": "{{host}}",
           "refId": "A",
           "instant": true,
@@ -126,7 +126,7 @@
             "type": "prometheus",
             "uid": "grafanacloud-prom"
           },
-          "expr": "count(netauto_drift_reachable == 0) or vector(0)",
+          "expr": "count(last_over_time(netauto_drift_reachable[15m]) == 0) or vector(0)",
           "legendFormat": "",
           "refId": "A",
           "instant": true,
@@ -185,7 +185,7 @@
             "type": "prometheus",
             "uid": "grafanacloud-prom"
           },
-          "expr": "time() - max(netauto_drift_last_run_seconds)",
+          "expr": "time() - max(last_over_time(netauto_drift_last_run_seconds[24h]))",
           "legendFormat": "",
           "refId": "A",
           "instant": true,
@@ -249,7 +249,7 @@
             "type": "prometheus",
             "uid": "grafanacloud-prom"
           },
-          "expr": "max(netauto_pipeline_last_success{pipeline=\"deploy\"})",
+          "expr": "max(last_over_time(netauto_pipeline_last_success{pipeline=\"deploy\"}[24h]))",
           "legendFormat": "",
           "refId": "A",
           "instant": true,
@@ -323,7 +323,7 @@
             "type": "prometheus",
             "uid": "grafanacloud-prom"
           },
-          "expr": "max(netauto_pipeline_last_duration_seconds{pipeline=\"deploy\"})",
+          "expr": "max(last_over_time(netauto_pipeline_last_duration_seconds{pipeline=\"deploy\"}[24h]))",
           "legendFormat": "",
           "refId": "A",
           "instant": true,
@@ -505,7 +505,7 @@
         "type": "tempo",
         "uid": "grafanacloud-traces"
       },
-      "description": "Cada linha é uma execução. Clique para ver render, checks, backup, apply e cada task do Ansible.",
+      "description": "Cada linha é uma execução: render, checks, backup, apply e as tasks do Ansible. O link público não exibe consultas do Tempo; os prints dos traces estão no README do projeto.",
       "gridPos": {
         "x": 0,
         "y": 13,
