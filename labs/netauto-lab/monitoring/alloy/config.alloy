@@ -1,0 +1,72 @@
+// Grafana Alloy: agente único entre o lab e o Grafana Cloud.
+//
+//   Python/Ansible --OTLP--> Alloy ----OTLP/HTTP----> Grafana Cloud (Mimir + Tempo)
+//   gnmic /metrics --scrape--^
+//
+// Credenciais só por variável de ambiente (monitoring/.env, fora do Git).
+
+otelcol.auth.basic "grafana_cloud" {
+	username = sys.env("GRAFANA_CLOUD_INSTANCE_ID")
+	password = sys.env("GRAFANA_CLOUD_API_TOKEN")
+}
+
+otelcol.exporter.otlphttp "grafana_cloud" {
+	client {
+		endpoint = sys.env("GRAFANA_CLOUD_OTLP_ENDPOINT")
+		auth     = otelcol.auth.basic.grafana_cloud.handler
+	}
+}
+
+otelcol.processor.batch "default" {
+	output {
+		metrics = [otelcol.exporter.otlphttp.grafana_cloud.input]
+		traces  = [otelcol.exporter.otlphttp.grafana_cloud.input]
+		logs    = [otelcol.exporter.otlphttp.grafana_cloud.input]
+	}
+}
+
+// Marca tudo como vindo do lab
+otelcol.processor.attributes "lab" {
+	action {
+		key    = "deployment.environment.name"
+		value  = "lab"
+		action = "insert"
+	}
+
+	output {
+		metrics = [otelcol.processor.batch.default.input]
+		traces  = [otelcol.processor.batch.default.input]
+		logs    = [otelcol.processor.batch.default.input]
+	}
+}
+
+// Traces e métricas do pipeline (netauto.pipeline, netauto.drift, callback do Ansible)
+otelcol.receiver.otlp "default" {
+	grpc {
+		endpoint = "0.0.0.0:4317"
+	}
+
+	http {
+		endpoint = "0.0.0.0:4318"
+	}
+
+	output {
+		metrics = [otelcol.processor.attributes.lab.input]
+		traces  = [otelcol.processor.attributes.lab.input]
+		logs    = [otelcol.processor.attributes.lab.input]
+	}
+}
+
+// Telemetria gNMI exposta pelo gnmic
+prometheus.scrape "gnmic" {
+	targets         = [{"__address__" = "gnmic:9804"}]
+	job_name        = "gnmic"
+	scrape_interval = "15s"
+	forward_to      = [otelcol.receiver.prometheus.gnmic.receiver]
+}
+
+otelcol.receiver.prometheus "gnmic" {
+	output {
+		metrics = [otelcol.processor.attributes.lab.input]
+	}
+}

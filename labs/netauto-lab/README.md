@@ -31,7 +31,9 @@ flowchart LR
 | Drift detection | `netauto/drift.py`: compara intenção x running, aponta `missing`, `changed` e `extra` |
 | Git, PR e code review | o CI publica a configuração gerada (formato CLI) no resumo do PR, para revisar a mudança de rede e não só o código |
 | Rastreabilidade e recuperação | logs JSON com `run_id` + commit, backup por execução, artefatos de 30 dias, rollback automático |
-| pytest | 29 testes que rodam sem equipamento (httpx `MockTransport`) |
+| pytest | 40 testes que rodam sem equipamento (httpx `MockTransport`, runner falso para o pipeline) |
+| Observabilidade | telemetria gNMI, traces OpenTelemetry do pipeline e do Ansible, métricas de drift, Grafana Cloud e alertas: veja [Observabilidade](#observabilidade) |
+| Validação real | pipeline executado contra o lab: veja [Resultado validado](#resultado-validado) |
 
 ## Topologia
 
@@ -63,7 +65,7 @@ export NETBOX_TOKEN=<token gerado no NetBox>
 export SRL_PASSWORD='NokiaSrl1!'   # senha padrão do SR Linux no containerlab, só para o lab
 
 make seed                    # fabric.yml -> NetBox (pode rodar quantas vezes quiser)
-make deploy                  # render, pre-checks, backup, apply, post-checks
+make deploy                  # render, pre-checks, backup, apply, post-checks (rollback se falhar)
 make drift                   # build/drift/report.json
 ```
 
@@ -84,6 +86,172 @@ Sem lab no ar, dá para trabalhar só com os testes e o render a partir do YAML:
 make test
 .venv/bin/python -m netauto.render --source file && cat build/intents/leaf1.cli
 ```
+
+## Resultado validado
+
+Executado contra o lab real (4× SR Linux 24.10.1 no containerlab 0.82 + NetBox 4.7), não só no CI.
+
+### 1. Antes e depois no leaf1
+
+Antes do pipeline, as portas tinham cabo e estavam up, mas sem nenhuma configuração:
+
+```
+ethernet-1/49 is up, speed 100G
+ethernet-1/50 is up, speed 100G
+Summary
+  0 loopback interfaces configured
+  1 subinterfaces are up          # só a gerência
+```
+
+Depois do `make deploy`, tudo vindo do NetBox:
+
+```
+ethernet-1/49.0 is up   Network-instance: default   IPv4 addr: 10.0.0.1/31
+ethernet-1/50.0 is up   Network-instance: default   IPv4 addr: 10.0.0.5/31
+system0.0 is up         Network-instance: default   IPv4 addr: 10.255.0.11/32
+Summary
+  4 subinterfaces are up
+```
+
+O leaf1 alcança o spine1 pelo /31:
+
+```
+A:leaf1# ping 10.0.0.0 network-instance default -c 3
+3 packets transmitted, 3 received, 0% packet loss
+```
+
+### 2. Pipeline completo (`make deploy`)
+
+| Etapa | Resultado |
+|---|---|
+| Seed no NetBox | 1 site, 4 devices, 12 IPs, 4 cabos. Na segunda execução, nada criado (idempotente) |
+| Render | intenção dos 4 equipamentos, idêntica à gerada a partir do YAML |
+| Pre-checks (Robot) | 2/2 PASS: intenção gerada, equipamentos respondendo via JSON-RPC |
+| Backup (Ansible) | running dos 4 salva em `build/backups/<host>-<run_id>.json` |
+| Apply (Ansible) | `changed=1` em cada equipamento, aplicado um por vez, com diff |
+| Post-checks (Robot) | 3/3 PASS: interfaces up, **LLDP igual aos cabos do NetBox**, sem drift |
+| Apply de novo | `changed=0` nos 4 (idempotente) |
+
+### 3. Drift: detectar e corrigir
+
+Alteração feita direto no equipamento, fora do pipeline:
+
+```
+A:leaf1# enter candidate
+set / interface ethernet-1/49 description "mexeram aqui"
+commit now
+```
+
+`make drift` detecta, aponta o campo exato e sai com código 2:
+
+```json
+{
+  "run_id": "20261103-234146",
+  "commit": "1e7662a",
+  "hosts": {
+    "leaf1": {
+      "drift": [
+        {
+          "path": "/interface[name=ethernet-1/49]/description",
+          "kind": "changed",
+          "expected": "to spine1 ethernet-1/1",
+          "actual": "mexeram aqui"
+        }
+      ]
+    },
+    "leaf2": { "drift": [] },
+    "spine1": { "drift": [] },
+    "spine2": { "drift": [] }
+  }
+}
+```
+
+`make apply` reconcilia só o que divergiu, sem tocar nos outros equipamentos:
+
+```
+TASK [Aplicar (merge) a intenção]
+      interface ethernet-1/49 {
+-         description "mexeram aqui"
++         description "to spine1 ethernet-1/1"
+      }
+changed: [leaf1]
+
+leaf1  : changed=1
+leaf2  : changed=0
+spine1 : changed=0
+spine2 : changed=0
+```
+
+E o `make drift` seguinte volta para código 0: a rede está igual ao NetBox.
+
+### 4. O que o teste real encontrou
+
+O CI passava, mas dois problemas só apareceram na execução contra o lab. Os dois foram corrigidos via PR:
+
+- **`group_vars` no lugar errado.** O Ansible só carrega `group_vars` ao lado do inventário ou do playbook; ele estava em `ansible/`. O lint e o syntax-check não pegam isso, porque não resolvem variáveis. A pasta foi movida para `ansible/inventory/group_vars/`.
+- **Dependência faltando.** O inventário dinâmico do NetBox exige `pytz`, e as coleções de rede usam `netaddr`. Os dois foram adicionados ao `requirements.txt`.
+
+Lição: testes de unidade e lint são necessários, mas não substituem uma execução contra o ambiente real. É para isso que serve o lab.
+
+## Observabilidade
+
+A rede e o próprio processo de automação são observados, e tudo fica visível num dashboard público no Grafana Cloud.
+
+```mermaid
+flowchart LR
+    SRL[4x SR Linux] -- gNMI streaming --> G[gnmic]
+    G -- /metrics --> A[Grafana Alloy]
+    P[netauto.pipeline<br/>netauto.drift] -- OTLP traces + métricas --> A
+    ANS[Ansible<br/>callback OTel] -- OTLP traces --> A
+    A -- OTLP/HTTP --> GC[(Grafana Cloud<br/>Mimir + Tempo)]
+    GC --> D[Dashboard público]
+    GC --> AL[Alertas no Telegram]
+```
+
+| Sinal | De onde vem | O que mostra |
+|---|---|---|
+| Telemetria da rede | gNMI dos SR Linux, coletado pelo **gnmic** | estado das portas, tráfego, erros, CPU e memória |
+| Traces do pipeline | **OpenTelemetry** no `netauto.pipeline` | um trace por deploy: render → pre-checks → backup → apply → post-checks → drift |
+| Traces do Ansible | callback `community.general.opentelemetry` | cada task do Ansible como span **dentro do mesmo trace** (via `TRACEPARENT`) |
+| Métricas de automação | OpenTelemetry no `netauto.drift` e no pipeline | `netauto_drift_items`, `netauto_drift_reachable`, `netauto_pipeline_runs_total`, duração do último deploy |
+
+O **Grafana Alloy** é o único agente: recebe OTLP do Python e do Ansible, raspa o gnmic e envia tudo para o Grafana Cloud com uma credencial só. Sem a variável `OTEL_EXPORTER_OTLP_ENDPOINT`, a instrumentação fica desligada (no-op), então o CI e os testes não dependem de nada disso.
+
+### Como ligar
+
+1. Crie uma conta gratuita no [Grafana Cloud](https://grafana.com/products/cloud/). Na sua stack, vá em **Connections > OpenTelemetry (OTLP)** e anote o **endpoint** e o **Instance ID**. Gere um token com escopo de escrita.
+2. Configure e suba o monitoramento (depois do `make lab-up`):
+
+   ```bash
+   cp monitoring/.env.example monitoring/.env   # preencha; o .env fica fora do Git
+   make mon-up
+   export OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318
+   make deploy                                  # agora gera traces e métricas
+   make drift-watch                             # drift a cada 5 min (Ctrl+C para parar)
+   ```
+
+3. No Grafana Cloud, vá em **Dashboards > New > Import** e envie `monitoring/grafana/netauto-dashboard.json`.
+4. Para deixar público: no dashboard, use **Share > Share externally** e copie o link.
+
+Para conferir se o Alloy está recebendo: abra http://localhost:12345 (a UI do Alloy) ou rode `curl -s localhost:12345/metrics | grep accepted`.
+
+### Alertas
+
+Configure no Grafana Cloud em **Alerting > Contact points** (tipo Telegram, com o token do bot e o chat ID) e crie as regras:
+
+| Alerta | Consulta | Condição |
+|---|---|---|
+| Drift detectado | `max by (host) (netauto_drift_items)` | `> 0` por 1 min |
+| Equipamento inacessível | `min by (host) (netauto_drift_reachable)` | `< 1` por 5 min |
+| Verificação de drift parada | `time() - max(netauto_drift_last_run_seconds)` | `> 900` |
+| Porta da fábrica caiu | `srl_interface_oper_state{interface_name=~"ethernet-.*"}` | `< 1` por 1 min |
+| Deploy falhou | `max(netauto_pipeline_last_success{pipeline="deploy"})` | `< 1` |
+
+### Custos e limites
+
+- Memória extra no lab: cerca de 350 MB (gnmic limitado a 128 MB e Alloy a 256 MB no compose).
+- O plano gratuito do Grafana Cloud cobre o volume do lab com folga: são poucas séries e poucos traces.
+- O dashboard mostra dados ao vivo **só enquanto o lab estiver ligado**; o histórico fica guardado conforme a retenção do plano.
 
 ## Pipeline no GitHub Actions
 
@@ -124,9 +292,12 @@ labs/netauto-lab/
 │   ├── render.py                # gera build/intents
 │   ├── srl_client.py            # JSON-RPC do SR Linux
 │   ├── drift.py                 # intenção x running
-│   └── robot_lib.py             # keywords do Robot
+│   ├── robot_lib.py             # keywords do Robot
+│   ├── pipeline.py              # orquestra o deploy como um trace
+│   └── telemetry.py             # OpenTelemetry (no-op sem endpoint)
 ├── templates/srlinux.cli.j2
-├── ansible/                     # inventário NetBox + playbooks
+├── ansible/                     # inventário NetBox (+ group_vars) e playbooks
+├── monitoring/                  # gnmic, Grafana Alloy e dashboard
 ├── robot/                       # pre/post-checks
 └── tests/                       # pytest
 ```
@@ -134,6 +305,7 @@ labs/netauto-lab/
 ## Próximos passos
 
 - Underlay eBGP (ASN por equipamento no NetBox) e post-check de sessões BGP estabelecidas.
+- Logs do pipeline também via OTLP (Loki), ligados aos traces pelo `trace_id`.
 - `confirm_timeout` do `nokia.srlinux.config`: commit que se desfaz sozinho se o post-check não confirmar.
 - Overlay EVPN/VXLAN com VLANs vindas do NetBox.
 - Webhook do NetBox abrindo PR automaticamente quando a fonte da verdade mudar.

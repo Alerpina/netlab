@@ -1,0 +1,43 @@
+# Monitoramento do lab: sobe depois do "make lab-up" (usa a rede de gerência do containerlab).
+#   cp .env.example .env   # preencha com os dados do Grafana Cloud
+#   docker compose up -d
+name: netauto-monitoring
+
+services:
+  gnmic:
+    image: ghcr.io/openconfig/gnmic:0.49.1
+    command: ["--config", "/app/gnmic.yml", "subscribe"]
+    environment:
+      GNMIC_PASSWORD: ${SRL_PASSWORD:?defina SRL_PASSWORD no .env}
+    volumes:
+      - ./gnmic.yml:/app/gnmic.yml:ro
+    networks: [netauto-mgmt]
+    restart: unless-stopped
+    mem_limit: 128m
+
+  alloy:
+    image: grafana/alloy:v1.21.3
+    command:
+      - run
+      - --server.http.listen-addr=0.0.0.0:12345
+      - --storage.path=/var/lib/alloy/data
+      - /etc/alloy/config.alloy
+    environment:
+      GRAFANA_CLOUD_OTLP_ENDPOINT: ${GRAFANA_CLOUD_OTLP_ENDPOINT:?defina no .env}
+      GRAFANA_CLOUD_INSTANCE_ID: ${GRAFANA_CLOUD_INSTANCE_ID:?defina no .env}
+      GRAFANA_CLOUD_API_TOKEN: ${GRAFANA_CLOUD_API_TOKEN:?defina no .env}
+    volumes:
+      - ./alloy/config.alloy:/etc/alloy/config.alloy:ro
+    ports:
+      # Só na máquina local: o pipeline em Python envia OTLP para cá
+      - "127.0.0.1:4317:4317"
+      - "127.0.0.1:4318:4318"
+      - "127.0.0.1:12345:12345"   # UI do Alloy, para depurar
+    networks: [netauto-mgmt]
+    depends_on: [gnmic]
+    restart: unless-stopped
+    mem_limit: 256m
+
+networks:
+  netauto-mgmt:
+    external: true

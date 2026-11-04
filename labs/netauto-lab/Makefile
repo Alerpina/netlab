@@ -6,7 +6,7 @@ export RUN_ID ?= $(shell date +%Y%m%d-%H%M%S)
 export NETBOX_API ?= $(NETBOX_URL)
 ANSIBLE := cd ansible && ../$(VENV_BIN)/ansible-playbook
 
-.PHONY: help venv collections lab-up lab-down netbox-up seed render pre backup apply post drift rollback deploy test lint
+.PHONY: help venv collections lab-up lab-down netbox-up seed render pre backup apply post drift rollback deploy deploy-check drift-watch mon-up mon-down test lint
 
 help:
 	@grep -E '^[a-z-]+:.*##' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-12s %s\n", $$1, $$2}'
@@ -50,7 +50,21 @@ drift: ## Relatório de drift em build/drift/report.json
 rollback: ## Volta o backup do RUN_ID informado: make rollback RUN_ID=...
 	$(ANSIBLE) playbooks/rollback.yml
 
-deploy: render pre backup apply post ## Fluxo completo (sem rollback automático)
+deploy: ## Fluxo completo num trace só, com rollback automático se o post-check falhar
+	$(PY) -m netauto.pipeline deploy
+
+deploy-check: ## Simula o deploy (ansible --check, nada muda na rede)
+	$(PY) -m netauto.pipeline deploy --check
+
+drift-watch: ## Render + drift a cada 5 min (mantém o painel e os alertas vivos)
+	while true; do export RUN_ID=$$(date +%Y%m%d-%H%M%S); $(PY) -m netauto.render --source netbox && $(PY) -m netauto.drift; sleep 300; done
+
+mon-up: ## Sobe gnmic + Grafana Alloy (precisa de monitoring/.env)
+	cd monitoring && docker compose up -d
+	@echo; echo "Para mandar traces e métricas do pipeline:"; echo "  export OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318"
+
+mon-down: ## Derruba o monitoramento
+	cd monitoring && docker compose down
 
 test: ## Testes unitários (sem equipamento)
 	$(PY) -m pytest
