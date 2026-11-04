@@ -10,7 +10,7 @@ services:
     environment:
       GNMIC_PASSWORD: ${SRL_PASSWORD:?defina SRL_PASSWORD no .env}
     volumes:
-      - ./gnmic.yml:/app/gnmic.yml:ro
+      - ./${GNMIC_FILE:-gnmic.yml}:/app/gnmic.yml:ro
     networks: [netauto-mgmt]
     restart: unless-stopped
     mem_limit: 128m

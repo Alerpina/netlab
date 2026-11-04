@@ -108,8 +108,8 @@
     {
       "id": 3,
       "type": "stat",
-      "title": "Equipamentos acessíveis",
-      "description": "Quantos responderam na última verificação de drift.",
+      "title": "Equipamentos inacessíveis",
+      "description": "Quantos não responderam na última verificação de drift. 0 = todos acessíveis.",
       "datasource": {
         "type": "prometheus",
         "uid": "grafanacloud-prom"
@@ -126,7 +126,7 @@
             "type": "prometheus",
             "uid": "grafanacloud-prom"
           },
-          "expr": "sum(netauto_drift_reachable)",
+          "expr": "count(netauto_drift_reachable == 0) or vector(0)",
           "legendFormat": "",
           "refId": "A",
           "instant": true,
@@ -139,12 +139,12 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "red",
+                "color": "green",
                 "value": null
               },
               {
-                "color": "green",
-                "value": 4
+                "color": "red",
+                "value": 1
               }
             ]
           },
