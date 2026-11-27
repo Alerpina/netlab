@@ -1,0 +1,50 @@
+#!/bin/bash
+# cloud-init: roda uma vez, como root, no primeiro boot. Log em /var/log/netlab-bootstrap.log
+set -euxo pipefail
+exec > /var/log/netlab-bootstrap.log 2>&1
+
+# 1. Kubernetes leve (k3s), sem o Traefik: não precisamos de ingress no lab
+curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION="${k3s_version}" \
+  INSTALL_K3S_EXEC="--disable traefik --write-kubeconfig-mode 644" sh -
+until k3s kubectl get nodes | grep -q ' Ready'; do sleep 5; done
+
+# kubectl sem sudo para o usuário ubuntu
+mkdir -p /home/ubuntu/.kube
+cp /etc/rancher/k3s/k3s.yaml /home/ubuntu/.kube/config
+chown -R ubuntu:ubuntu /home/ubuntu/.kube
+echo 'alias k=kubectl' >> /home/ubuntu/.bashrc
+
+# 2. Argo CD (server-side apply: os CRDs são grandes demais para o apply comum)
+k3s kubectl create namespace argocd --dry-run=client -o yaml | k3s kubectl apply -f -
+k3s kubectl apply -n argocd --server-side --force-conflicts \
+  -f "https://raw.githubusercontent.com/argoproj/argo-cd/${argocd_version}/manifests/install.yaml"
+k3s kubectl wait --for=condition=Established crd/applications.argoproj.io --timeout=180s
+k3s kubectl -n argocd rollout status deploy/argocd-server --timeout=600s
+k3s kubectl -n argocd patch configmap argocd-cmd-params-cm --type merge -p '{"data":{"server.insecure":"true"}}'
+k3s kubectl -n argocd rollout restart deploy/argocd-server
+
+# 3. A Application: o Argo CD passa a seguir a pasta do podinfo no GitHub
+cat <<'APP' | k3s kubectl apply -f -
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: podinfo
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: ${git_repo_url}
+    targetRevision: main
+    path: labs/k8s-gitops-lab/apps/podinfo
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: demo
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+APP
+
+echo "BOOTSTRAP OK"
