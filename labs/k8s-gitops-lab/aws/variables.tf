@@ -1,7 +1,7 @@
 variable "region" {
-  description = "Região AWS (o AWS Academy Learner Lab usa us-east-1)"
+  description = "Região AWS (conta própria: us-east-2 Ohio; AWS Academy Learner Lab: us-east-1)"
   type        = string
-  default     = "us-east-1"
+  default     = "us-east-2"
 }
 
 variable "owner" {
@@ -26,16 +26,22 @@ variable "instance_type" {
   default     = "t3.medium"
 }
 
-variable "key_name" {
-  description = "Par de chaves para SSH (no Learner Lab já existe o vockey)"
+variable "ssh_public_key_path" {
+  description = "Chave pública que o Terraform cadastra na AWS como key pair"
   type        = string
-  default     = "vockey"
+  default     = "~/.ssh/netlab.pub"
+}
+
+variable "ssh_private_key_path" {
+  description = "Chave privada correspondente (só usada para montar o comando de SSH no output)"
+  type        = string
+  default     = "~/.ssh/netlab"
 }
 
 variable "instance_profile" {
-  description = "Instance profile da EC2. O Learner Lab não deixa criar roles; usa o LabInstanceProfile pronto"
+  description = "Instance profile da EC2. Vazio = sem role (o lab não precisa). No AWS Academy, use LabInstanceProfile"
   type        = string
-  default     = "LabInstanceProfile"
+  default     = ""
 }
 
 variable "git_repo_url" {

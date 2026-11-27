@@ -1,4 +1,4 @@
-# k8s-gitops-lab na AWS (AWS Academy Learner Lab)
+# k8s-gitops-lab na AWS
 
 Terraform cria a rede e uma EC2; no primeiro boot, a EC2 instala **k3s** (Kubernetes leve), o **Argo CD** e a Application que faz o deploy do `podinfo` a partir deste repositório.
 
@@ -15,28 +15,41 @@ flowchart LR
     YOU[Você] -- SSH + túnel --> EC2
 ```
 
-Custo: t3.medium ~US$ 0,04/h, mais o disco de 20 GB. **Rode `terraform destroy` no fim.**
+Custo: t3.medium ~US$ 0,04/h, mais o disco de 20 GB, coberto pelos créditos. **Rode `terraform destroy` no fim.**
 
 ---
 
-## Passo 0. Credenciais do Learner Lab
+## Passo 0. Conta, credenciais e proteção de custo
 
-1. No AWS Academy: **Modules > Learner Lab > Start Lab**. Espere a bolinha ficar verde.
-2. **AWS Details > AWS CLI: Show**. Copie o bloco `[default]` para `~/.aws/credentials` no WSL:
-   ```bash
-   mkdir -p ~/.aws && nano ~/.aws/credentials     # cole o bloco inteiro e salve
-   chmod 600 ~/.aws/credentials
-   ```
-3. **AWS Details > Download PEM** (é a chave `vockey`). Mova para o WSL:
-   ```bash
-   cp /mnt/c/Users/lorraine/Downloads/labsuser.pem ~/.ssh/ && chmod 600 ~/.ssh/labsuser.pem
-   ```
+Conta AWS própria no plano gratuito (créditos), região **Ohio (us-east-2)**.
 
-> **Entrevista:** "As credenciais são temporárias (têm session token) e vêm de uma role; na empresa o ideal é o mesmo: nada de chave de acesso fixa, e sim SSO ou OIDC do GitHub Actions assumindo uma role com o mínimo de permissão."
+**0.1 Alerta de gasto (FinOps, 1 minuto).** Console > **Billing and Cost Management > Budgets > Create budget > Use a template > Zero spend budget**, com o seu e-mail. Avisa se algo começar a cobrar fora dos créditos.
 
-As credenciais expiram quando a sessão do lab acaba (~4 h). Se o Terraform disser `ExpiredToken`, copie de novo.
+**0.2 Usuário para o Terraform.** Nunca crie chave de acesso para o root.
+1. Console > **IAM > Users > Create user**: nome `terraform-lab`, **sem** acesso ao console.
+2. **Attach policies directly**: `PowerUserAccess` (tudo menos IAM; o lab não cria IAM).
+3. Abra o usuário > **Security credentials > Create access key > Command Line Interface (CLI)**. Copie a Access key e a Secret.
 
----
+```bash
+mkdir -p ~/.aws && chmod 700 ~/.aws
+cat > ~/.aws/credentials <<'EOF'
+[default]
+aws_access_key_id = COLE_AQUI
+aws_secret_access_key = COLE_AQUI
+EOF
+chmod 600 ~/.aws/credentials
+nano ~/.aws/credentials        # troque os COLE_AQUI e salve
+```
+
+**0.3 Chave SSH.** O Terraform cadastra a sua chave pública (`~/.ssh/netlab.pub`) como key pair; a privada nunca sai do PC.
+
+```bash
+ls ~/.ssh/netlab ~/.ssh/netlab.pub
+```
+
+> **Entrevista:** "Usei um usuário IAM só para o Terraform, com política sem acesso a IAM, e chave de acesso que eu apago no fim. Na empresa o ideal é nem ter chave fixa: SSO para pessoas e OIDC do GitHub Actions assumindo uma role para o pipeline. E sempre um budget com alerta."
+
+**No fim do lab:** `terraform destroy` e **desative a access key** do `terraform-lab` (IAM > Users > Security credentials).
 
 ## Passo 1. Variáveis e `init`
 
@@ -65,7 +78,7 @@ terraform init
 terraform plan
 ```
 
-Leia a saída: `+ create` em cada recurso, e o resumo `Plan: 9 to add, 0 to change, 0 to destroy`.
+Leia a saída: `+ create` em cada recurso, e o resumo `Plan: 10 to add, 0 to change, 0 to destroy`.
 
 | Recurso | Para que serve |
 |---|---|
@@ -74,6 +87,7 @@ Leia a saída: `+ create` em cada recurso, e o resumo `Plan: 9 to add, 0 to chan
 | `aws_subnet` (pública) | onde a EC2 fica; pública porque a rota padrão vai para o IGW |
 | `aws_route_table` + association | a rota `0.0.0.0/0 -> IGW` |
 | `aws_security_group` + regras | firewall **stateful**: entra só SSH do seu IP; a saída é livre |
+| `aws_key_pair` | sua chave pública cadastrada na AWS |
 | `aws_instance` | a EC2 com k3s |
 | `data.aws_ami` | **data source**: consulta a AMI Ubuntu mais nova, não cria nada |
 
@@ -170,7 +184,14 @@ terraform destroy      # digite yes
 
 | Erro | Causa | Solução |
 |---|---|---|
-| `ExpiredToken` / `InvalidClientTokenId` | sessão do Learner Lab expirou | **Start Lab** e copie as credenciais de novo |
-| `UnauthorizedOperation` em `iam:...` | o Learner Lab bloqueia criar IAM | o código já usa o `LabInstanceProfile` pronto |
+| `InvalidClientTokenId` / `SignatureDoesNotMatch` | chave copiada errada | confira `~/.aws/credentials` (sem espaços extras) |
+| `no such file` em `netlab.pub` | caminho da chave | ajuste `ssh_public_key_path` no `terraform.tfvars` |
+| instância "not eligible" para o plano gratuito | restrição do plano | use `instance_type = "t3.small"` no tfvars |
 | SSH com timeout | seu IP mudou | atualize `terraform.tfvars` e rode `terraform apply` |
 | `kubectl` sem pods do podinfo | o bootstrap ainda está rodando | acompanhe `/var/log/netlab-bootstrap.log` |
+
+---
+
+### Usando o AWS Academy (Learner Lab) em vez de conta própria
+
+No `terraform.tfvars`: `region = "us-east-1"` e `instance_profile = "LabInstanceProfile"`. As credenciais vêm de **AWS Details > AWS CLI > Show** (temporárias, com session token).
